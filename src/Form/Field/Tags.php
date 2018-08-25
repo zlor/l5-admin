@@ -37,7 +37,7 @@ class Tags extends Field
             $this->value = explode(',', $this->value);
         }
 
-        $this->value = array_filter((array) $this->value);
+        $this->value = array_filter((array) $this->value, 'strlen');
     }
 
     /**
@@ -46,7 +46,7 @@ class Tags extends Field
     public function prepare($value)
     {
         if (is_array($value) && !Arr::isAssoc($value)) {
-            $value = implode(',', array_filter($value));
+            $value = implode(',', array_filter($value, 'strlen'));
         }
 
         return $value;
@@ -65,7 +65,7 @@ class Tags extends Field
             return empty($this->value) ? ($this->getDefault() ?? []) : $this->value;
         }
 
-        $this->value = $value;
+        $this->value = (array) $value;
 
         return $this;
     }
@@ -80,6 +80,8 @@ class Tags extends Field
             tokenSeparators: [',']
         });";
 
-        return parent::render();
+        return parent::render()->with([
+            'options' => array_unique(array_merge($this->value, $this->options)),
+        ]);
     }
 }

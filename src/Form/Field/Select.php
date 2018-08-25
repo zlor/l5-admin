@@ -44,6 +44,11 @@ class Select extends Field
     {
         // remote options
         if (is_string($options)) {
+            // reload selected
+            if (class_exists($options) && in_array('Illuminate\Database\Eloquent\Model', class_parents($options))) {
+                return $this->selected(...func_get_args());
+            }
+
             return $this->loadRemoteOptions(...func_get_args());
         }
 
@@ -131,6 +136,104 @@ EOT;
     }
 
     /**
+     * Load options for other selects on change.
+     *
+     * @param string $fields
+     * @param string $sourceUrls
+     * @param string $idField
+     * @param string $textField
+     *
+     * @return $this
+     */
+    public function loads($fields = [], $sourceUrls = [], $idField = 'id', $textField = 'text')
+    {
+        $fieldsStr = implode('.', $fields);
+        $urlsStr = implode('^', $sourceUrls);
+        $script = <<<EOT
+var fields = '$fieldsStr'.split('.');
+var urls = '$urlsStr'.split('^');
+
+var refreshOptions = function(url, target) {
+    $.get(url).then(function(data) {
+        target.find("option").remove();
+        $(target).select2({
+            data: $.map(data, function (d) {
+                d.id = d.$idField;
+                d.text = d.$textField;
+                return d;
+            })
+        }).trigger('change');
+    });
+};
+
+$(document).off('change', "{$this->getElementClassSelector()}");
+$(document).on('change', "{$this->getElementClassSelector()}", function () {
+    var _this = this;
+    var promises = [];
+
+    fields.forEach(function(field, index){
+        var target = $(_this).closest('.fields-group').find('.' + fields[index]);
+        promises.push(refreshOptions(urls[index] + "?q="+ _this.value, target));
+    });
+
+    $.when(promises).then(function() {
+        console.log('开始更新其它select的选择options');
+    });
+});
+EOT;
+
+        Admin::script($script);
+
+        return $this;
+    }
+
+    /**
+     * Load options from current selected resource(s).
+     *
+     * @param Illuminate\Database\Eloquent\Model $model
+     * @param string                             $textField
+     * @param string                             $idField
+     *
+     * @return $this
+     */
+    protected function selected($model, $textField = 'name', $idField = 'id')
+    {
+        $this->options = function ($resource) use ($model, $textField, $idField) {
+            if (null == $resource) {
+                return [];
+            }
+
+            if (is_array($resource) && !empty($resource) && isset($resource[0]['id'])) {
+                $resource = array_map(function ($res) {
+                    return $res['id'];
+                }, $resource);
+            } elseif (is_array($resource) && !empty($resource) && isset($resource['id'])) {
+                $resource = $resource['id'];
+            }
+
+            $model = $model::find($resource);
+
+            if ($model) {
+                if ($model instanceof \Illuminate\Support\Collection) {
+                    $results = [];
+
+                    foreach ($model as $result) {
+                        $results[$result->{$idField}] = $result->{$textField};
+                    }
+
+                    return $results;
+                }
+
+                return [$model->{$idField} => $model->{$textField}];
+            }
+
+            return [];
+        };
+
+        return $this;
+    }
+
+    /**
      * Load options from remote.
      *
      * @param string $url
@@ -150,7 +253,17 @@ EOT;
         $this->script = <<<EOT
 
 $.ajax($ajaxOptions).done(function(data) {
-  $("{$this->getElementClassSelector()}").select2({data: data});
+
+  var select = $("{$this->getElementClassSelector()}");
+
+  select.select2({data: data});
+  
+  var value = select.data('value') + '';
+  
+  if (value) {
+    value = value.split(',');
+    select.select2('val', value);
+  }
 });
 
 EOT;
@@ -169,6 +282,15 @@ EOT;
      */
     public function ajax($url, $idField = 'id', $textField = 'text')
     {
+        $configs = array_merge([
+            'allowClear'         => true,
+            'placeholder'        => $this->label,
+            'minimumInputLength' => 1,
+        ], $this->config);
+
+        $configs = json_encode($configs);
+        $configs = substr($configs, 1, strlen($configs) - 2);
+
         $this->script = <<<EOT
 
 $("{$this->getElementClassSelector()}").select2({
@@ -198,7 +320,7 @@ $("{$this->getElementClassSelector()}").select2({
     },
     cache: true
   },
-  minimumInputLength: 1,
+  $configs,
   escapeMarkup: function (markup) {
       return markup;
   }
@@ -250,11 +372,15 @@ EOT;
             $this->options(call_user_func($this->options, $this->value));
         }
 
-        $this->options = array_filter($this->options);
+        $this->options = array_filter($this->options, 'strlen');
 
-        return parent::render()->with([
+        $this->addVariables([
             'options' => $this->options,
             'groups'  => $this->groups,
         ]);
+
+        $this->attribute('data-value', implode(',', (array)$this->value()));
+
+        return parent::render();
     }
 }
