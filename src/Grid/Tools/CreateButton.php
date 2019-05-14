@@ -28,7 +28,7 @@ class CreateButton extends AbstractTool
      */
     public function render()
     {
-        if (!$this->grid->allowCreation()) {
+        if (!$this->grid->showCreateBtn()) {
             return '';
         }
 
@@ -37,8 +37,8 @@ class CreateButton extends AbstractTool
         return <<<EOT
 
 <div class="btn-group pull-right" style="margin-right: 10px">
-    <a href="{$this->grid->getCreateUrl()}" class="btn btn-sm btn-success">
-        <i class="fa fa-save"></i>&nbsp;&nbsp;{$new}
+    <a href="{$this->grid->getCreateUrl()}" class="btn btn-sm btn-success" title="{$new}">
+        <i class="fa fa-plus"></i><span class="hidden-xs">&nbsp;&nbsp;{$new}</span>
     </a>
 </div>
 

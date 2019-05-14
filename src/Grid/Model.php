@@ -26,6 +26,11 @@ class Model
     protected $model;
 
     /**
+     * @var EloquentModel
+     */
+    protected $originalModel;
+
+    /**
      * Array of queries of the eloquent model.
      *
      * @var \Illuminate\Support\Collection
@@ -103,6 +108,8 @@ class Model
     {
         $this->model = $model;
 
+        $this->originalModel = $model;
+
         $this->queries = collect();
 
 //        static::doNotSnakeAttributes($this->model);
@@ -120,6 +127,14 @@ class Model
         $class = get_class($model);
 
         $class::$snakeAttributes = false;
+    }
+
+    /**
+     * @return EloquentModel
+     */
+    public function getOriginalModel()
+    {
+        return $this->originalModel;
     }
 
     /**
@@ -164,6 +179,16 @@ class Model
         $this->perPageName = $name;
 
         return $this;
+    }
+
+    /**
+     * Get per-page number.
+     *
+     * @return int
+     */
+    public function getPerPage()
+    {
+        return $this->perPage;
     }
 
     /**
@@ -375,6 +400,28 @@ class Model
     }
 
     /**
+     * @return \Illuminate\Database\Eloquent\Builder|EloquentModel
+     */
+    public function getQueryBuilder()
+    {
+        if ($this->relation) {
+            return $this->relation->getQuery();
+        }
+
+        $this->setSort();
+
+        $queryBuilder = $this->originalModel;
+
+        $this->queries->reject(function ($query) {
+            return in_array($query['method'], ['get', 'paginate']);
+        })->each(function ($query) use (&$queryBuilder) {
+            $queryBuilder = $queryBuilder->{$query['method']}(...$query['arguments']);
+        });
+
+        return $queryBuilder;
+    }
+
+    /**
      * If current page is greater than last page, then redirect to last page.
      *
      * @param LengthAwarePaginator $paginator
@@ -429,7 +476,7 @@ class Model
      */
     protected function resolvePerPage($paginate)
     {
-        if ($perPage = app('request')->input($this->perPageName)) {
+        if ($perPage = request($this->perPageName)) {
             if (is_array($paginate)) {
                 $paginate['arguments'][0] = (int) $perPage;
 
@@ -444,7 +491,7 @@ class Model
         }
 
         if ($name = $this->grid->getName()) {
-            return [$this->perPage, null, "{$name}_page"];
+            return [$this->perPage, ['*'], "{$name}_page"];
         }
 
         return [$this->perPage];
@@ -480,14 +527,25 @@ class Model
             return;
         }
 
-        if (str_contains($this->sort['column'], '.')) {
+        if (Str::contains($this->sort['column'], '.')) {
             $this->setRelationSort($this->sort['column']);
         } else {
             $this->resetOrderBy();
 
+            // get column. if contains "cast", set set column as cast
+            if (!empty($this->sort['cast'])) {
+                $column = "CAST({$this->sort['column']} AS {$this->sort['cast']}) {$this->sort['type']}";
+                $method = 'orderByRaw';
+                $arguments = [$column];
+            } else {
+                $column = $this->sort['column'];
+                $method = 'orderBy';
+                $arguments = [$column, $this->sort['type']];
+            }
+
             $this->queries->push([
-                'method'    => 'orderBy',
-                'arguments' => [$this->sort['column'], $this->sort['type']],
+                'method'    => $method,
+                'arguments' => $arguments,
             ]);
         }
     }
@@ -507,6 +565,11 @@ class Model
             return $query['method'] == 'with' && in_array($relationName, $query['arguments']);
         })) {
             $relation = $this->model->$relationName();
+
+            $this->queries->push([
+                'method'    => 'select',
+                'arguments' => [$this->model->getTable().'.*'],
+            ]);
 
             $this->queries->push([
                 'method'    => 'join',
@@ -553,9 +616,11 @@ class Model
         $relatedTable = $relation->getRelated()->getTable();
 
         if ($relation instanceof BelongsTo) {
+            $foreignKeyMethod = (app()->version() < '5.8.0') ? 'getForeignKey' : 'getForeignKeyName';
+
             return [
                 $relatedTable,
-                $relation->getForeignKey(),
+                $relation->{$foreignKeyMethod}(),
                 '=',
                 $relatedTable.'.'.$relation->getRelated()->getKeyName(),
             ];

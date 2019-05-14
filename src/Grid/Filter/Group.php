@@ -3,6 +3,7 @@
 namespace Encore\Admin\Grid\Filter;
 
 use Encore\Admin\Admin;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 
 class Group extends AbstractFilter
@@ -37,9 +38,9 @@ class Group extends AbstractFilter
 
         if (is_callable($label) && is_null($builder)) {
             $this->builder = $label;
-            $this->label   = ucfirst($this->column);
+            $this->label = ucfirst($this->column);
         } elseif (is_string($label) && is_callable($builder)) {
-            $this->label   = $label;
+            $this->label = $label;
             $this->builder = $builder;
         }
 
@@ -62,7 +63,8 @@ class Group extends AbstractFilter
      * Join a query to group.
      *
      * @param string $label
-     * @param array $condition
+     * @param array  $condition
+     *
      * @return $this
      */
     protected function joinGroup($label, array $condition)
@@ -79,6 +81,7 @@ class Group extends AbstractFilter
      *
      * @param string $label
      * @param string $operator
+     *
      * @return Group
      */
     public function equal($label = '', $operator = '=')
@@ -94,6 +97,7 @@ class Group extends AbstractFilter
      * Filter out `not equal` records.
      *
      * @param string $label
+     *
      * @return Group
      */
     public function notEqual($label = '')
@@ -105,6 +109,7 @@ class Group extends AbstractFilter
      * Filter out `greater then` records.
      *
      * @param string $label
+     *
      * @return Group
      */
     public function gt($label = '')
@@ -116,6 +121,7 @@ class Group extends AbstractFilter
      * Filter out `less then` records.
      *
      * @param string $label
+     *
      * @return Group
      */
     public function lt($label = '')
@@ -127,6 +133,7 @@ class Group extends AbstractFilter
      * Filter out `not less then` records.
      *
      * @param string $label
+     *
      * @return Group
      */
     public function nlt($label = '')
@@ -138,6 +145,7 @@ class Group extends AbstractFilter
      * Filter out `not greater than` records.
      *
      * @param string $label
+     *
      * @return Group
      */
     public function ngt($label = '')
@@ -149,6 +157,7 @@ class Group extends AbstractFilter
      * Filter out records that match the regex.
      *
      * @param string $label
+     *
      * @return Group
      */
     public function match($label = '')
@@ -161,11 +170,12 @@ class Group extends AbstractFilter
     /**
      * Specify a where query.
      *
-     * @param string $label
+     * @param string   $label
      * @param \Closure $builder
+     *
      * @return Group
      */
-    public function where($label = '', \Closure $builder)
+    public function where($label, \Closure $builder)
     {
         $this->input = $this->value;
 
@@ -179,6 +189,7 @@ class Group extends AbstractFilter
      *
      * @param string $label
      * @param string $operator
+     *
      * @return Group
      */
     public function like($label = '', $operator = 'like')
@@ -194,6 +205,7 @@ class Group extends AbstractFilter
      * Alias of `like` method.
      *
      * @param string $label
+     *
      * @return Group
      */
     public function contains($label = '')
@@ -205,6 +217,7 @@ class Group extends AbstractFilter
      * Specify a where ilike query.
      *
      * @param string $label
+     *
      * @return Group
      */
     public function ilike($label = '')
@@ -216,6 +229,7 @@ class Group extends AbstractFilter
      * Filter out records which starts with input query.
      *
      * @param string $label
+     *
      * @return Group
      */
     public function startWith($label = '')
@@ -231,6 +245,7 @@ class Group extends AbstractFilter
      * Filter out records which ends with input query.
      *
      * @param string $label
+     *
      * @return Group
      */
     public function endWith($label = '')
@@ -247,7 +262,7 @@ class Group extends AbstractFilter
      */
     public function condition($inputs)
     {
-        $value = array_get($inputs, $this->column);
+        $value = Arr::get($inputs, $this->column);
 
         if (!isset($value)) {
             return;
@@ -255,7 +270,7 @@ class Group extends AbstractFilter
 
         $this->value = $value;
 
-        $group = array_get($inputs, "{$this->id}_group");
+        $group = Arr::get($inputs, "{$this->id}_group");
 
         call_user_func($this->builder, $this);
 
@@ -271,8 +286,6 @@ class Group extends AbstractFilter
     {
         $script = <<<SCRIPT
 $(".{$this->name} li a").click(function(){
-
-console.log($(this).text());
     $(".{$this->name}-label").text($(this).text());
     $(".{$this->name}-operation").val($(this).data('index'));
 });

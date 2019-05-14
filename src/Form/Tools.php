@@ -80,9 +80,13 @@ class Tools implements Renderable
      *
      * @return $this
      */
-    public function disableList()
+    public function disableList(bool $disable = true)
     {
-        array_delete($this->tools, 'list');
+        if ($disable) {
+            array_delete($this->tools, 'list');
+        } elseif (!in_array('list', $this->tools)) {
+            array_push($this->tools, 'list');
+        }
 
         return $this;
     }
@@ -92,9 +96,13 @@ class Tools implements Renderable
      *
      * @return $this
      */
-    public function disableDelete()
+    public function disableDelete(bool $disable = true)
     {
-        array_delete($this->tools, 'delete');
+        if ($disable) {
+            array_delete($this->tools, 'delete');
+        } elseif (!in_array('delete', $this->tools)) {
+            array_push($this->tools, 'delete');
+        }
 
         return $this;
     }
@@ -104,9 +112,13 @@ class Tools implements Renderable
      *
      * @return $this
      */
-    public function disableView()
+    public function disableView(bool $disable = true)
     {
-        array_delete($this->tools, 'view');
+        if ($disable) {
+            array_delete($this->tools, 'view');
+        } elseif (!in_array('view', $this->tools)) {
+            array_push($this->tools, 'view');
+        }
 
         return $this;
     }
@@ -148,6 +160,16 @@ class Tools implements Renderable
     }
 
     /**
+     * Get parent form of tool.
+     *
+     * @return Builder
+     */
+    public function form()
+    {
+        return $this->form;
+    }
+
+    /**
      * Render list button.
      *
      * @return string
@@ -158,7 +180,7 @@ class Tools implements Renderable
 
         return <<<EOT
 <div class="btn-group pull-right" style="margin-right: 5px">
-    <a href="{$this->getListPath()}" class="btn btn-sm btn-default"><i class="fa fa-list"></i>&nbsp;$text</a>
+    <a href="{$this->getListPath()}" class="btn btn-sm btn-default" title="$text"><i class="fa fa-list"></i><span class="hidden-xs">&nbsp;$text</span></a>
 </div>
 EOT;
     }
@@ -174,8 +196,8 @@ EOT;
 
         return <<<HTML
 <div class="btn-group pull-right" style="margin-right: 5px">
-    <a href="{$this->getViewPath()}" class="btn btn-sm btn-primary">
-        <i class="fa fa-eye"></i> {$view}
+    <a href="{$this->getViewPath()}" class="btn btn-sm btn-primary" title="{$view}">
+        <i class="fa fa-eye"></i><span class="hidden-xs"> {$view}</span>
     </a>
 </div>
 HTML;
@@ -188,9 +210,12 @@ HTML;
      */
     protected function renderDelete()
     {
-        $deleteConfirm = trans('admin.delete_confirm');
-        $confirm = trans('admin.confirm');
-        $cancel = trans('admin.cancel');
+        $trans = [
+            'delete_confirm' => trans('admin.delete_confirm'),
+            'confirm'        => trans('admin.confirm'),
+            'cancel'         => trans('admin.cancel'),
+            'delete'         => trans('admin.delete'),
+        ];
 
         $class = uniqid();
 
@@ -199,47 +224,50 @@ HTML;
 $('.{$class}-delete').unbind('click').click(function() {
 
     swal({
-      title: "$deleteConfirm",
-      type: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#DD6B55",
-      confirmButtonText: "$confirm",
-      closeOnConfirm: false,
-      cancelButtonText: "$cancel"
-    },
-    function(){
-        $.ajax({
-            method: 'post',
-            url: '{$this->getDeletePath()}',
-            data: {
-                _method:'delete',
-                _token:LA.token,
-            },
-            success: function (data) {
-                $.pjax({container:'#pjax-container', url: '{$this->getListPath()}' });
+        title: "{$trans['delete_confirm']}",
+        type: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#DD6B55",
+        confirmButtonText: "{$trans['confirm']}",
+        showLoaderOnConfirm: true,
+        cancelButtonText: "{$trans['cancel']}",
+        preConfirm: function() {
+            return new Promise(function(resolve) {
+                $.ajax({
+                    method: 'post',
+                    url: '{$this->getDeletePath()}',
+                    data: {
+                        _method:'delete',
+                        _token:LA.token,
+                    },
+                    success: function (data) {
+                        $.pjax({container:'#pjax-container', url: '{$this->getListPath()}' });
 
-                if (typeof data === 'object') {
-                    if (data.status) {
-                        swal(data.message, '', 'success');
-                    } else {
-                        swal(data.message, '', 'error');
+                        resolve(data);
                     }
-                }
+                });
+            });
+        }
+    }).then(function(result) {
+        var data = result.value;
+        if (typeof data === 'object') {
+            if (data.status) {
+                swal(data.message, '', 'success');
+            } else {
+                swal(data.message, '', 'error');
             }
-        });
+        }
     });
 });
 
 SCRIPT;
 
-        $delete = trans('admin.delete');
-
         Admin::script($script);
 
         return <<<HTML
 <div class="btn-group pull-right" style="margin-right: 5px">
-    <a href="javascript:void(0);" class="btn btn-sm btn-danger {$class}-delete">
-        <i class="fa fa-trash"></i>  {$delete}
+    <a href="javascript:void(0);" class="btn btn-sm btn-danger {$class}-delete" title="{$trans['delete']}">
+        <i class="fa fa-trash"></i><span class="hidden-xs">  {$trans['delete']}</span>
     </a>
 </div>
 HTML;
@@ -291,6 +319,11 @@ HTML;
      */
     protected function renderCustomTools($tools)
     {
+        if ($this->form->isCreating()) {
+            $this->disableView();
+            $this->disableDelete();
+        }
+
         if (empty($tools)) {
             return '';
         }

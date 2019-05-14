@@ -5,6 +5,7 @@ namespace Encore\Admin\Widgets;
 use Encore\Admin\Form\Field;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Contracts\Support\Renderable;
+use Illuminate\Support\Arr;
 
 /**
  * Class Form.
@@ -36,7 +37,6 @@ use Illuminate\Contracts\Support\Renderable;
  * @method Field\TimeRange      timeRange($start, $end, $label = '')
  * @method Field\Number         number($name, $label = '')
  * @method Field\Currency       currency($name, $label = '')
- * @method Field\Json           json($name, $label = '')
  * @method Field\SwitchField    switch($name, $label = '')
  * @method Field\Display        display($name, $label = '')
  * @method Field\Rate           rate($name, $label = '')
@@ -62,6 +62,23 @@ class Form implements Renderable
      * @var array
      */
     protected $attributes = [];
+
+    /**
+     * Available buttons.
+     *
+     * @var array
+     */
+    protected $buttons = ['reset', 'submit'];
+
+    /**
+     * Width for label and submit field.
+     *
+     * @var array
+     */
+    protected $width = [
+        'label' => 2,
+        'field' => 8,
+    ];
 
     /**
      * Form constructor.
@@ -116,6 +133,12 @@ class Form implements Renderable
      */
     public function method($method = 'POST')
     {
+        if (strtolower($method) == 'put') {
+            $this->hidden('_method')->default($method);
+
+            return $this;
+        }
+
         return $this->attribute('method', strtoupper($method));
     }
 
@@ -147,7 +170,31 @@ class Form implements Renderable
      */
     public function disablePjax()
     {
-        array_forget($this->attributes, 'pjax-container');
+        Arr::forget($this->attributes, 'pjax-container');
+
+        return $this;
+    }
+
+    /**
+     * Disable reset button.
+     *
+     * @return $this
+     */
+    public function disableReset()
+    {
+        array_delete($this->buttons, 'reset');
+
+        return $this;
+    }
+
+    /**
+     * Disable submit button.
+     *
+     * @return $this
+     */
+    public function disableSubmit()
+    {
+        array_delete($this->buttons, 'submit');
 
         return $this;
     }
@@ -167,6 +214,12 @@ class Form implements Renderable
             $field->setWidth($fieldWidth, $labelWidth);
         });
 
+        // set this width
+        $this->width = [
+            'label' => $labelWidth,
+            'field' => $fieldWidth,
+        ];
+
         return $this;
     }
 
@@ -179,7 +232,7 @@ class Form implements Renderable
      */
     public static function findFieldClass($method)
     {
-        $class = array_get(\Encore\Admin\Form::$availableFields, $method);
+        $class = Arr::get(\Encore\Admin\Form::$availableFields, $method);
 
         if (class_exists($class)) {
             return $class;
@@ -195,7 +248,7 @@ class Form implements Renderable
      *
      * @return $this
      */
-    protected function pushField(Field &$field)
+    public function pushField(Field &$field)
     {
         array_push($this->fields, $field);
 
@@ -217,6 +270,8 @@ class Form implements Renderable
             'fields'     => $this->fields,
             'attributes' => $this->formatAttribute(),
             'method'     => $this->attributes['method'],
+            'buttons'    => $this->buttons,
+            'width'      => $this->width,
         ];
     }
 
@@ -270,7 +325,7 @@ class Form implements Renderable
     public function __call($method, $arguments)
     {
         if ($className = static::findFieldClass($method)) {
-            $name = array_get($arguments, 0, '');
+            $name = Arr::get($arguments, 0, '');
 
             $element = new $className($name, array_slice($arguments, 1));
 

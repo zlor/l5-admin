@@ -38,6 +38,16 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Laravel-admin bootstrap setting
+    |--------------------------------------------------------------------------
+    |
+    | This value is the path of laravel-admin bootstrap file.
+    |
+    */
+    'bootstrap' => app_path('Admin/bootstrap.php'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Laravel-admin route settings
     |--------------------------------------------------------------------------
     |
@@ -48,7 +58,7 @@ return [
     */
     'route' => [
 
-        'prefix' => 'admin',
+        'prefix' => env('ADMIN_ROUTE_PREFIX', 'admin'),
 
         'namespace' => 'App\\Admin\\Controllers',
 
@@ -85,7 +95,7 @@ return [
     | If your page is going to be accessed via https, set it to `true`.
     |
     */
-    'secure' => false,
+    'https' => env('ADMIN_HTTPS', false),
 
     /*
     |--------------------------------------------------------------------------
@@ -95,8 +105,13 @@ return [
     | Authentication settings for all admin pages. Include an authentication
     | guard and a user provider setting of authentication driver.
     |
+    | You can specify a controller for `login` `logout` and other auth routes.
+    |
     */
     'auth' => [
+
+        'controller' => App\Admin\Controllers\AuthController::class,
+
         'guards' => [
             'admin' => [
                 'driver'   => 'session',
@@ -109,6 +124,18 @@ return [
                 'driver' => 'eloquent',
                 'model'  => Encore\Admin\Auth\Database\Administrator::class,
             ],
+        ],
+
+        // Add "remember me" to login form
+        'remember' => true,
+
+        // Redirect to the specified URI when user is not authorized.
+        'redirect_to' => 'auth/login',
+
+        // The URIs that should be excluded from authorization.
+        'excepts' => [
+            'auth/login',
+            'auth/logout',
         ],
     ],
 
@@ -183,6 +210,11 @@ return [
         'enable' => true,
 
         /*
+         * Only logging allowed methods in the list
+         */
+        'allowed_methods' => ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'CONNECT', 'OPTIONS', 'TRACE', 'PATCH'],
+
+        /*
          * Routes that will not log to database.
          *
          * All method to path like: admin/auth/logs
@@ -195,11 +227,31 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | User default avatar
+    |--------------------------------------------------------------------------
+    |
+    | Set a default avatar for newly created users.
+    |
+    */
+    'default_avatar' => '/vendor/laravel-admin/AdminLTE/dist/img/user2-160x160.jpg',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Admin map field provider
+    |--------------------------------------------------------------------------
+    |
+    | Supported: "tencent", "google", "yandex".
+    |
+    */
+    'map_provider' => 'google',
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Skin
     |--------------------------------------------------------------------------
     |
     | This value is the skin of admin pages.
-    | @see https://adminlte.io/docs/2.4/skin
+    | @see https://adminlte.io/docs/2.4/layout
     |
     | Supported:
     |    "skin-blue", "skin-blue-light", "skin-yellow", "skin-yellow-light",
@@ -235,13 +287,66 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Version
+    | Show version at footer
     |--------------------------------------------------------------------------
     |
-    | This version number set will appear in the page footer.
+    | Whether to display the version number of laravel-admin at the footer of
+    | each page
     |
     */
-    'version' => '1.5.x-dev',
+    'show_version' => true,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Show environment at footer
+    |--------------------------------------------------------------------------
+    |
+    | Whether to display the environment at the footer of each page
+    |
+    */
+    'show_environment' => true,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Menu bind to permission
+    |--------------------------------------------------------------------------
+    |
+    | whether enable menu bind to a permission
+    */
+    'menu_bind_permission' => true,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Enable default breadcrumb
+    |--------------------------------------------------------------------------
+    |
+    | Whether enable default breadcrumb for every page content.
+    */
+    'enable_default_breadcrumb' => true,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Enable/Disable assets minify
+    |--------------------------------------------------------------------------
+    */
+    'minify_assets' => true,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Enable/Disable sidebar menu search
+    |--------------------------------------------------------------------------
+    */
+    'enable_menu_search' => true,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Extension Directory
+    |--------------------------------------------------------------------------
+    |
+    | When you use command `php artisan admin:extend` to generate extensions,
+    | the extension files will be generated in this directory.
+    */
+    'extension_dir' => app_path('Admin/Extensions'),
 
     /*
     |--------------------------------------------------------------------------

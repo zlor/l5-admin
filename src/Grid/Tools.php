@@ -7,6 +7,7 @@ use Encore\Admin\Grid\Tools\AbstractTool;
 use Encore\Admin\Grid\Tools\BatchActions;
 use Encore\Admin\Grid\Tools\FilterButton;
 use Encore\Admin\Grid\Tools\RefreshButton;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Contracts\Support\Renderable;
 use Illuminate\Support\Collection;
 
@@ -83,10 +84,14 @@ class Tools implements Renderable
      *
      * @return void
      */
-    public function disableFilterButton()
+    public function disableFilterButton(bool $disable = true)
     {
-        $this->tools = $this->tools->reject(function ($tool) {
-            return $tool instanceof FilterButton;
+        $this->tools = $this->tools->map(function ($tool) use ($disable) {
+            if ($tool instanceof FilterButton) {
+                return $tool->disable($disable);
+            }
+
+            return $tool;
         });
     }
 
@@ -95,10 +100,14 @@ class Tools implements Renderable
      *
      * @return void
      */
-    public function disableRefreshButton()
+    public function disableRefreshButton(bool $disable = true)
     {
-        $this->tools = $this->tools->reject(function ($tool) {
-            return $tool instanceof RefreshButton;
+        $this->tools = $this->tools->map(function (AbstractTool $tool) use ($disable) {
+            if ($tool instanceof RefreshButton) {
+                return $tool->disable($disable);
+            }
+
+            return $tool;
         });
     }
 
@@ -107,10 +116,14 @@ class Tools implements Renderable
      *
      * @return void
      */
-    public function disableBatchActions()
+    public function disableBatchActions(bool $disable = true)
     {
-        $this->tools = $this->tools->reject(function ($tool) {
-            return $tool instanceof BatchActions;
+        $this->tools = $this->tools->map(function ($tool) use ($disable) {
+            if ($tool instanceof BatchActions) {
+                return $tool->disable($disable);
+            }
+
+            return $tool;
         });
     }
 
@@ -133,7 +146,19 @@ class Tools implements Renderable
     {
         return $this->tools->map(function ($tool) {
             if ($tool instanceof AbstractTool) {
+                if (!$tool->allowed()) {
+                    return '';
+                }
+
                 return $tool->setGrid($this->grid)->render();
+            }
+
+            if ($tool instanceof Renderable) {
+                return $tool->render();
+            }
+
+            if ($tool instanceof Htmlable) {
+                return $tool->toHtml();
             }
 
             return (string) $tool;

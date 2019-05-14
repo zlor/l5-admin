@@ -3,11 +3,13 @@
 namespace Encore\Admin\Grid;
 
 use Closure;
+use Encore\Admin\Admin;
 use Encore\Admin\Grid;
 use Encore\Admin\Grid\Displayers\AbstractDisplayer;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 class Column
@@ -53,6 +55,20 @@ class Column
     protected $sort;
 
     /**
+     * Help message.
+     *
+     * @var string
+     */
+    protected $help = '';
+
+    /**
+     * Cast Name.
+     *
+     * @var array
+     */
+    protected $cast;
+
+    /**
      * Attributes of column.
      *
      * @var array
@@ -76,9 +92,9 @@ class Column
     /**
      * Original grid data.
      *
-     * @var array
+     * @var Collection
      */
-    protected static $originalGridData = [];
+    protected static $originalGridModels;
 
     /**
      * @var []Closure
@@ -105,7 +121,7 @@ class Column
     protected static $htmlAttributes = [];
 
     /**
-     * @var
+     * @var Model
      */
     protected static $model;
 
@@ -171,11 +187,11 @@ class Column
     /**
      * Set original data for column.
      *
-     * @param array $input
+     * @param Collection $collection
      */
-    public static function setOriginalGridData(array $input)
+    public static function setOriginalGridModels(Collection $collection)
     {
-        static::$originalGridData = $input;
+        static::$originalGridModels = $collection;
     }
 
     /**
@@ -201,7 +217,7 @@ class Column
      */
     public static function getAttributes($name)
     {
-        return array_get(static::$htmlAttributes, $name, '');
+        return Arr::get(static::$htmlAttributes, $name, '');
     }
 
     /**
@@ -277,13 +293,37 @@ class Column
     }
 
     /**
+     * Set sort value.
+     *
+     * @param bool $sort
+     *
+     * @return Column
+     */
+    public function sort($sort)
+    {
+        $this->sortable = $sort;
+
+        return $this;
+    }
+
+    /**
      * Mark this column as sortable.
      *
      * @return Column
      */
     public function sortable()
     {
-        $this->sortable = true;
+        return $this->sort(true);
+    }
+
+    /**
+     * Set cast name for sortable.
+     *
+     * @return Column
+     */
+    public function cast($cast)
+    {
+        $this->cast = $cast;
 
         return $this;
     }
@@ -303,6 +343,28 @@ class Column
     }
 
     /**
+     * Display using display abstract.
+     *
+     * @param string $abstract
+     * @param array  $arguments
+     *
+     * @return Column
+     */
+    public function displayUsing($abstract, $arguments = [])
+    {
+        $grid = $this->grid;
+
+        $column = $this;
+
+        return $this->display(function ($value) use ($grid, $column, $abstract, $arguments) {
+            /** @var AbstractDisplayer $displayer */
+            $displayer = new $abstract($value, $grid, $column, $this);
+
+            return $displayer->display(...$arguments);
+        });
+    }
+
+    /**
      * Display column using array value map.
      *
      * @param array $values
@@ -317,8 +379,38 @@ class Column
                 return $default;
             }
 
-            return array_get($values, $value, $default);
+            return Arr::get($values, $value, $default);
         });
+    }
+
+    /**
+     * Render this column with the given view.
+     *
+     * @param string $view
+     *
+     * @return $this
+     */
+    public function view($view)
+    {
+        return $this->display(function ($value) use ($view) {
+            $model = $this;
+
+            return view($view, compact('model', 'value'))->render();
+        });
+    }
+
+    /**
+     * Add column to total-row.
+     *
+     * @param null $display
+     *
+     * @return $this
+     */
+    public function totalRow($display = null)
+    {
+        $this->grid->addTotalRow($this->name, $display);
+
+        return $this;
     }
 
     /**
@@ -342,8 +434,17 @@ class Column
     protected function callDisplayCallbacks($value, $key)
     {
         foreach ($this->displayCallbacks as $callback) {
-            $callback = $this->bindOriginalRow($callback, $key);
-            $value = call_user_func($callback, $value);
+            $previous = $value;
+
+            $callback = $this->bindOriginalRowModel($callback, $key);
+            $value = call_user_func_array($callback, [$value, $this]);
+
+            if (($value instanceof static) &&
+                ($last = array_pop($this->displayCallbacks))
+            ) {
+                $last = $this->bindOriginalRowModel($last, $key);
+                $value = call_user_func($last, $previous);
+            }
         }
 
         return $value;
@@ -357,11 +458,11 @@ class Column
      *
      * @return Closure
      */
-    protected function bindOriginalRow(Closure $callback, $key)
+    protected function bindOriginalRowModel(Closure $callback, $key)
     {
-        $originalRow = static::$originalGridData[$key];
+        $rowModel = static::$originalGridModels[$key];
 
-        return $callback->bindTo(static::$model->newFromBuilder($originalRow));
+        return $callback->bindTo($rowModel);
     }
 
     /**
@@ -374,11 +475,11 @@ class Column
     public function fill(array $data)
     {
         foreach ($data as $key => &$row) {
-            $this->original = $value = array_get($row, $this->name);
+            $this->original = $value = Arr::get($row, $this->name);
 
             $value = $this->htmlEntityEncode($value);
 
-            array_set($row, $this->name, $value);
+            Arr::set($row, $this->name, $value);
 
             if ($this->isDefinedColumn()) {
                 $this->useDefinedColumn();
@@ -386,7 +487,7 @@ class Column
 
             if ($this->hasDisplayCallbacks()) {
                 $value = $this->callDisplayCallbacks($this->original, $key);
-                array_set($row, $this->name, $value);
+                Arr::set($row, $this->name, $value);
             }
         }
 
@@ -429,6 +530,7 @@ class Column
         $column = $this;
 
         $this->display(function ($value) use ($grid, $column, $class) {
+            /** @var AbstractDisplayer $definition */
             $definition = new $class($value, $grid, $column, $this);
 
             return $definition->display();
@@ -458,12 +560,12 @@ class Column
     /**
      * Create the column sorter.
      *
-     * @return string|void
+     * @return string
      */
     public function sorter()
     {
         if (!$this->sortable) {
-            return;
+            return '';
         }
 
         $icon = 'fa-sort';
@@ -474,10 +576,16 @@ class Column
             $icon .= "-amount-{$this->sort['type']}";
         }
 
-        $query = app('request')->all();
-        $query = array_merge($query, [$this->grid->model()->getSortName() => ['column' => $this->name, 'type' => $type]]);
+        // set sort value
+        $sort = ['column' => $this->name, 'type' => $type];
+        if (isset($this->cast)) {
+            $sort['cast'] = $this->cast;
+        }
 
-        $url = URL::current().'?'.http_build_query($query);
+        $query = app('request')->all();
+        $query = array_merge($query, [$this->grid->model()->getSortName() => $sort]);
+
+        $url = url()->current().'?'.http_build_query($query);
 
         return "<a class=\"fa fa-fw $icon\" href=\"$url\"></a>";
     }
@@ -496,6 +604,34 @@ class Column
         }
 
         return isset($this->sort['column']) && $this->sort['column'] == $this->name;
+    }
+
+    /**
+     * Set help message for column.
+     *
+     * @param string $help
+     *
+     * @return $this|string
+     */
+    public function help($help = '')
+    {
+        if (!empty($help)) {
+            $this->help = $help;
+
+            return $this;
+        }
+
+        if (empty($this->help)) {
+            return '';
+        }
+
+        Admin::script("$('.column-help').popover();");
+
+        return <<<HELP
+<a href="javascript:void(0);" class="column-help" data-container="body" data-toggle="popover" data-trigger="hover" data-placement="bottom" data-content="{$this->help}">
+    <i class="fa fa-question-circle"></i>
+</a>
+HELP;
     }
 
     /**
@@ -559,9 +695,10 @@ class Column
             $column = $this;
 
             return $this->display(function ($value) use ($abstract, $grid, $column, $arguments) {
+                /** @var AbstractDisplayer $displayer */
                 $displayer = new $abstract($value, $grid, $column, $this);
 
-                return call_user_func_array([$displayer, 'display'], $arguments);
+                return $displayer->display(...$arguments);
             });
         }
 

@@ -20,6 +20,12 @@ use Illuminate\Support\Facades\Facade;
  * @method static void navbar(\Closure $builder = null)
  * @method static void registerAuthRoutes()
  * @method static void extend($name, $class)
+ * @method static void disablePjax()
+ * @method static void booting(\Closure $builder)
+ * @method static void booted(\Closure $builder)
+ * @method static void bootstrap()
+ *
+ * @see \Encore\Admin\Admin
  */
 class Admin extends Facade
 {

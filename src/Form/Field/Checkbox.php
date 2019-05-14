@@ -29,7 +29,29 @@ class Checkbox extends MultipleSelect
             $options = $options->toArray();
         }
 
-        $this->options = (array) $options;
+        if (is_callable($options)) {
+            $this->options = $options;
+        } else {
+            $this->options = (array) $options;
+        }
+
+        return $this;
+    }
+
+    /**
+     * Set checked.
+     *
+     * @param array|callable|string $checked
+     *
+     * @return $this
+     */
+    public function checked($checked = [])
+    {
+        if ($checked instanceof Arrayable) {
+            $checked = $checked->toArray();
+        }
+
+        $this->checked = (array) $checked;
 
         return $this;
     }
@@ -65,6 +87,8 @@ class Checkbox extends MultipleSelect
     {
         $this->script = "$('{$this->getElementClassSelector()}').iCheck({checkboxClass:'icheckbox_minimal-blue'});";
 
-        return parent::render()->with('inline', $this->inline);
+        $this->addVariables(['checked' => $this->checked, 'inline' => $this->inline]);
+
+        return parent::render();
     }
 }
